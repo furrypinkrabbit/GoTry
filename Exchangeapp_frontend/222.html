@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>计设前端</title>
+    <style>
+        /* 全局样式 */
+        body,
+        html {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+        }
+
+        /* 电路线背景 */
+        .circuit-background {
+            height: 100vh;
+            width: 100%;
+            background: url('https://i.imgur.com/706706y.png') repeat;
+            /* 可根据实际情况调整背景颜色 */
+            background-color: #1a1a1a;
+            position: relative;
+            z-index: -1;
+        }
+
+        /* 输入框和视频样式 */
+        input[type="file"],
+        video,
+        #loading {
+            position: fixed;
+            z-index: 1;
+        }
+
+        input[type="file"] {
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 18px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #00f7ff;
+            color: #00f7ff;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        input[type="file"]:hover {
+            background: rgba(0, 247, 255, 0.1);
+        }
+
+        video {
+            top: 160px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: auto;
+            max-width: 50%;
+            height: auto;
+            border: 2px solid #00f7ff;
+            border-radius: 5px;
+            box-shadow: 0 0 10px #00f7ff;
+        }
+
+        textarea {
+            position: fixed;
+            z-index: 1;
+            width: 80%;
+            max-width: none;
+            height: auto;
+            padding: 10px;
+            pointer-events: none;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #00f7ff;
+            color: #00f7ff;
+            border-radius: 5px;
+            resize: none;
+        }
+
+        /* 加载动画样式 */
+        #loading {
+            display: none;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00f7ff;
+            text-align: center;
+            padding-top: 50vh;
+            font-size: 20px;
+            z-index: 1000;
+        }
+
+        .spinner {
+            border: 4px solid rgba(0, 247, 255, 0.1);
+            border-left-color: #00f7ff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 左右按钮样式 */
+        button {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #00f7ff;
+            color: #00f7ff;
+            padding: 10px 20px;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1;
+        }
+
+        #prevButton {
+            left: 20px;
+        }
+
+        #nextButton {
+            right: 20px;
+        }
+
+        button:hover {
+            background: rgba(0, 247, 255, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="circuit-background"></div>
+    <input type="file" id="VideoUpload" accept="video/*">
+    <video id="VideoPreview" width="320" height="240" controls></video>
+    <textarea id="VideoSummary" rows="4" cols="50"></textarea>
+    <div id="loading">
+        <div class="spinner"></div>
+        正在处理视频，请等待
+    </div>
+    <button id="prevButton" onclick="prevVideo()">上一个</button>
+    <button id="nextButton" onclick="nextVideo()">下一个</button>
+    <script>
+        const videoUpload = document.getElementById('VideoUpload');
+        const videoPreview = document.getElementById('VideoPreview');
+        const loading = document.getElementById('loading');
+        const videoSummary = document.getElementById('VideoSummary');
+        let currentIndex = 0;
+        let videoUrls = [];
+        let textSummaries = [];
+
+        // 函数用于更新文本框的位置
+        function updateTextareaPosition() {
+            const videoRect = videoPreview.getBoundingClientRect();
+            const videoBottom = videoRect.bottom;
+            const textareaWidth = videoSummary.offsetWidth;
+            const leftPosition = window.innerWidth / 2 - textareaWidth / 2;
+            let topPosition = videoBottom + 20; // 20px 是间距
+
+            // 边界检查，确保文本框在可视区域内
+            if (topPosition + videoSummary.offsetHeight > window.innerHeight) {
+                topPosition = window.innerHeight - videoSummary.offsetHeight - 20;
+            }
+
+            // 确保文本框不与视频重叠
+            if (topPosition < videoBottom) {
+                topPosition = videoBottom + 20;
+            }
+
+            videoSummary.style.top = topPosition + 'px';
+            videoSummary.style.left = leftPosition + 'px';
+        }
+
+        // 监听窗口大小变化事件
+        window.addEventListener('resize', updateTextareaPosition);
+
+        videoUpload.addEventListener('change', async function (event) {
+            const file = event.target.files[0];
+            if (file) {
+                loading.style.display = 'block';
+
+                const formData = new FormData();
+                formData.append('video', file);
+                formData.append('name', file.name);
+                formData.append('size', file.size);
+                formData.append('title', file.name);
+
+                try {
+                    const response = await fetch('/uploadVideo', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        const reader = new FileReader();
+                        reader.onload = function (e) {
+                            videoPreview.src = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+
+                        const checkProcessedVideo = async () => {
+                            const processedResponse = await fetch(`/getVideos/${data.video}`);
+                            if (processedResponse.ok) {
+                                const videoData = await processedResponse.json();
+                                videoUrls = videoData.videos;
+                                const textResponse = await fetch(`/getText/${data.video}`);
+                                if (textResponse.ok) {
+                                    const textData = await textResponse.json();
+                                    textSummaries = textData.summaries;
+                                }
+                                currentIndex = 0;
+                                videoPreview.src = videoUrls[currentIndex];
+                                videoSummary.value = textSummaries[currentIndex];
+                                loading.style.display = 'none';
+                                // 更新文本框位置
+                                updateTextareaPosition();
+                            } else {
+                                setTimeout(checkProcessedVideo, 2000);
+                            }
+                        };
+                        checkProcessedVideo();
+                    } else {
+                        console.error('Video upload failed');
+                        loading.style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Error uploading video:', error);
+                    loading.style.display = 'none';
+                }
+            }
+        });
+
+        function prevVideo() {
+            if (videoUrls.length > 0) {
+                currentIndex = (currentIndex - 1 + videoUrls.length) % videoUrls.length;
+                videoPreview.src = videoUrls[currentIndex];
+                videoSummary.value = textSummaries[currentIndex];
+                updateTextareaPosition();
+            }
+        }
+
+        function nextVideo() {
+            if (videoUrls.length > 0) {
+                currentIndex = (currentIndex + 1) % videoUrls.length;
+                videoPreview.src = videoUrls[currentIndex];
+                videoSummary.value = textSummaries[currentIndex];
+                updateTextareaPosition();
+            }
+        }
+
+        function simulateVideoProcessing() {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    const processedVideoUrl = '"C:/Users/xuetianyi/Videos/Overwatch 2/Overwatch 2 2023.10.26 - 12.03.57.01.mp4"';
+                    resolve(processedVideoUrl);
+                }, 3000);
+            });
+        }
+    </script>
+</body>
+
+</html>
